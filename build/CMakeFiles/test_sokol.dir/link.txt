@@ -1,0 +1,1 @@
+/usr/bin/c++ -g CMakeFiles/test_sokol.dir/main.cpp.o -o test_sokol  -lX11 -lXi -lXcursor -lEGL -lGL -ldl -lpthread -lm 

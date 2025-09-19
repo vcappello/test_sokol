@@ -1,0 +1,7 @@
+[
+{
+  "directory": "/home/vincenzo/Projects/cpp/test_sokol/build",
+  "command": "/usr/bin/c++  -I/home/vincenzo/Projects/cpp/test_sokol/thirdparty -g -o CMakeFiles/test_sokol.dir/main.cpp.o -c /home/vincenzo/Projects/cpp/test_sokol/main.cpp",
+  "file": "/home/vincenzo/Projects/cpp/test_sokol/main.cpp"
+}
+]
