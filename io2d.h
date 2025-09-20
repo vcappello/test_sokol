@@ -33,29 +33,6 @@ namespace io2d
         channel_t a = 1.0f;
     };
 
-    class point_2d
-    {
-    public:
-        using unit_t = float;
-
-        point_2d() {}
-
-        point_2d(unit_t x, unit_t y) : _x(x), _y(y) {}
-
-        unit_t x() const { return _x; }
-
-        unit_t y() const { return _y; }
-
-        static point_2d move(const point_2d pt, unit_t dx, unit_t dy)
-        {
-            return point_2d(pt.x() + dx, pt.y() + dy);
-        }
-
-    protected:
-        unit_t _x = 0.0f;
-        unit_t _y = 0.0f;
-    };
-
     /**
      * @brief Stroke style for path drawing
      */
@@ -98,7 +75,7 @@ namespace io2d
     class path_line : public path_element
     {
     public:
-        path_line(const point_2d &pt1, const point_2d &pt2) : _pt1(pt1),
+        path_line(const sgp_point &pt1, const sgp_point &pt2) : _pt1(pt1),
                                                               _pt2(pt2)
         {
         }
@@ -111,7 +88,7 @@ namespace io2d
             sgp_set_color(style.color.r, style.color.g, style.color.b, style.color.a);
             if (style.width == 1.0f)
             {
-                sgp_draw_line(_pt1.x(), _pt1.y(), _pt2.x(), _pt2.y());
+                sgp_draw_line(_pt1.x, _pt1.y, _pt2.x, _pt2.y);
             }
             else
             {
@@ -148,23 +125,23 @@ namespace io2d
          * @param thickness The line thickness
          * @return std::vector<sgp_point> The array of points
          */
-        static std::vector<sgp_point> get_thick_line_points(point_2d start, point_2d end, float thickness)
+        static std::vector<sgp_point> get_thick_line_points(sgp_point start, sgp_point end, float thickness)
         {
-            GLfloat d = std::sqrt((end.x() - start.x()) * (end.x() - start.x()) + (end.y() - start.y()) * (end.y() - start.y()));
-            GLfloat y_shift = thickness * (end.x() - start.x()) / (d * 2.0f);
-            GLfloat x_shift = -thickness * (end.y() - start.y()) / (d * 2.0f);
+            GLfloat d = std::sqrt((end.x - start.x) * (end.x - start.x) + (end.y - start.y) * (end.y - start.y));
+            GLfloat y_shift = thickness * (end.x - start.x) / (d * 2.0f);
+            GLfloat x_shift = -thickness * (end.y - start.y) / (d * 2.0f);
 
             return std::vector<sgp_point>{
-                sgp_point{start.x() - x_shift, start.y() - y_shift},
-                sgp_point{start.x() + x_shift, start.y() + y_shift},
-                sgp_point{end.x() + x_shift, end.y() + y_shift},
-                sgp_point{end.x() - x_shift, end.y() - y_shift}};
+                sgp_point{start.x - x_shift, start.y - y_shift},
+                sgp_point{start.x + x_shift, start.y + y_shift},
+                sgp_point{end.x + x_shift, end.y + y_shift},
+                sgp_point{end.x - x_shift, end.y - y_shift}};
         }
 
         /**
          * @brief Draw a thick line using triangle strip
          */
-        static void draw_thik_line(point_2d start, point_2d end, float thickness)
+        static void draw_thik_line(sgp_point start, sgp_point end, float thickness)
         {
             auto line_points = get_thick_line_points(start, end, thickness);
 
@@ -176,9 +153,20 @@ namespace io2d
             sgp_draw_filled_triangles_strip(points.data(), points.size());
         }
 
+        static void draw_thik_lines(const std::vector<sgp_point> &points, float thickness)
+        {
+            if (points.size() < 2)
+                return;
+
+            for (int i = 1; i < points.size(); i++)
+            {
+                draw_thik_line(points[i - 1], points[i], thickness);
+            }
+        }
+
     protected:
-        point_2d _pt1;
-        point_2d _pt2;
+        sgp_point _pt1;
+        sgp_point _pt2;
     };
 
     /**
@@ -187,7 +175,7 @@ namespace io2d
     class path_rect : public path_element
     {
     public:
-        path_rect(const point_2d &pt1, const point_2d &pt2) : _pt1(pt1),
+        path_rect(const sgp_point &pt1, const sgp_point &pt2) : _pt1(pt1),
                                                               _pt2(pt2)
         {
         }
@@ -200,19 +188,19 @@ namespace io2d
             sgp_set_color(style.color.r, style.color.g, style.color.b, style.color.a);
             if (style.width == 1.0f)
             {
-                std::array<sgp_point, 5> points = {sgp_point{_pt1.x(), _pt1.y()},
-                                                   sgp_point{_pt2.x(), _pt1.y()},
-                                                   sgp_point{_pt2.x(), _pt2.y()},
-                                                   sgp_point{_pt1.x(), _pt2.y()},
-                                                   sgp_point{_pt1.x(), _pt1.y()}};
+                std::array<sgp_point, 5> points = {sgp_point{_pt1.x, _pt1.y},
+                                                   sgp_point{_pt2.x, _pt1.y},
+                                                   sgp_point{_pt2.x, _pt2.y},
+                                                   sgp_point{_pt1.x, _pt2.y},
+                                                   sgp_point{_pt1.x, _pt1.y}};
                 sgp_draw_lines_strip(points.data(), points.size());
             }
             else
             {
-                path_line::draw_thik_line(point_2d(_pt1.x(), _pt1.y()), point_2d(_pt2.x(), _pt1.y()), style.width);
-                path_line::draw_thik_line(point_2d(_pt2.x(), _pt1.y()), point_2d(_pt2.x(), _pt2.y()), style.width);
-                path_line::draw_thik_line(point_2d(_pt2.x(), _pt2.y()), point_2d(_pt1.x(), _pt2.y()), style.width);
-                path_line::draw_thik_line(point_2d(_pt1.x(), _pt2.y()), point_2d(_pt1.x(), _pt1.y()), style.width);
+                path_line::draw_thik_line(sgp_point{_pt1.x, _pt1.y}, sgp_point{_pt2.x, _pt1.y}, style.width);
+                path_line::draw_thik_line(sgp_point{_pt2.x, _pt1.y}, sgp_point{_pt2.x, _pt2.y}, style.width);
+                path_line::draw_thik_line(sgp_point{_pt2.x, _pt2.y}, sgp_point{_pt1.x, _pt2.y}, style.width);
+                path_line::draw_thik_line(sgp_point{_pt1.x, _pt2.y}, sgp_point{_pt1.x, _pt1.y}, style.width);
             }
         }
 
@@ -222,12 +210,12 @@ namespace io2d
         void fill(const fill_style_s &style) override
         {
             sgp_set_color(style.color.r, style.color.g, style.color.b, style.color.a);
-            sgp_draw_filled_rect(_pt1.x(), _pt1.y(), _pt2.x() - _pt1.x(), _pt2.y() - _pt1.y());
+            sgp_draw_filled_rect(_pt1.x, _pt1.y, _pt2.x - _pt1.x, _pt2.y - _pt1.y);
         }
 
     protected:
-        point_2d _pt1;
-        point_2d _pt2;
+        sgp_point _pt1;
+        sgp_point _pt2;
     };
 
     struct ellipse_data
@@ -244,7 +232,7 @@ namespace io2d
     class path_ellipse : public path_element
     {
     public:
-        path_ellipse(const point_2d &pt1, const point_2d &pt2, float alpha_start = 0.0f, float alpha_end = M_PI * 2) : _pt1(pt1),
+        path_ellipse(const sgp_point &pt1, const sgp_point &pt2, float alpha_start = 0.0f, float alpha_end = M_PI * 2) : _pt1(pt1),
                                                                                                                        _pt2(pt2),
                                                                                                                        _alpha_start(alpha_start),
                                                                                                                        _alpha_end(alpha_end)
@@ -268,7 +256,7 @@ namespace io2d
 
                 for (int i = 1; i < points.size() - 1; i++)
                 {
-                    path_line::draw_thik_line(point_2d(points[i - 1].x, points[i - 1].y), point_2d(points[i].x, points[i].y), style.width);
+                    path_line::draw_thik_line(points[i - 1], points[i], style.width);
                 }
             }
         }
@@ -305,7 +293,7 @@ namespace io2d
          * @param alpha_end The ending angle in radians
          * @return std::vector<sgp_point> The array of points
          */
-        static std::vector<sgp_point> get_ellipse_points(point_2d start, point_2d end, float alpha_start = 0.0f, float alpha_end = M_PI * 2)
+        static std::vector<sgp_point> get_ellipse_points(sgp_point start, sgp_point end, float alpha_start = 0.0f, float alpha_end = M_PI * 2)
         {
             auto ed = get_ellipse_data(start, end);
 
@@ -336,21 +324,21 @@ namespace io2d
             return points;
         }
 
-        static ellipse_data get_ellipse_data(point_2d start, point_2d end)
+        static ellipse_data get_ellipse_data(sgp_point start, sgp_point end)
         {
             ellipse_data e;
 
-            e.rx = (end.x() - start.x()) / 2.0f;
-            e.ry = (end.y() - start.y()) / 2.0f;
-            e.cx = start.x() + e.rx;
-            e.cy = start.y() + e.ry;
+            e.rx = (end.x - start.x) / 2.0f;
+            e.ry = (end.y - start.y) / 2.0f;
+            e.cx = start.x + e.rx;
+            e.cy = start.y + e.ry;
 
             return e;
         }
 
     protected:
-        point_2d _pt1;
-        point_2d _pt2;
+        sgp_point _pt1;
+        sgp_point _pt2;
         float _alpha_start;
         float _alpha_end;
     };
@@ -361,7 +349,7 @@ namespace io2d
     class path_roundrect : public path_element
     {
     public:
-        path_roundrect(const point_2d &pt1, const point_2d &pt2, float rx, float ry) : _pt1(pt1),
+        path_roundrect(const sgp_point &pt1, const sgp_point &pt2, float rx, float ry) : _pt1(pt1),
                                                                                        _pt2(pt2),
                                                                                        _rx(rx),
                                                                                        _ry(ry)
@@ -374,46 +362,52 @@ namespace io2d
         void stroke(const stroke_style_s &style) override
         {
             sgp_set_color(style.color.r, style.color.g, style.color.b, style.color.a);
+
+            auto arc_top_left = path_ellipse::get_ellipse_points(sgp_point{_pt1.x, _pt1.y},
+                                                                 sgp_point{_pt1.x + _rx * 2, _pt1.y + _ry * 2},
+                                                                 M_PI,
+                                                                 M_PI_2 * 3.0f);
+
+            auto arc_top_right = path_ellipse::get_ellipse_points(sgp_point{_pt2.x - _rx * 2, _pt1.y},
+                                                                  sgp_point{_pt2.x, _pt1.y + _ry * 2},
+                                                                  M_PI_2 * 3.0f,
+                                                                  M_PI * 2.0f);
+
+            auto arc_bottom_right = path_ellipse::get_ellipse_points(sgp_point{_pt2.x - _rx * 2, _pt2.y - _ry * 2},
+                                                                     sgp_point{_pt2.x, _pt2.y},
+                                                                     0,
+                                                                     M_PI_2);
+
+            auto arc_bottom_left = path_ellipse::get_ellipse_points(sgp_point{_pt1.x, _pt2.y - _ry * 2},
+                                                                    sgp_point{_pt1.x + _rx * 2, _pt2.y},
+                                                                    M_PI_2,
+                                                                    M_PI);
+
             if (style.width == 1.0f)
             {
-                std::array<sgp_line, 4> lines = {sgp_line{sgp_point{_pt1.x() + _rx, _pt1.y()}, sgp_point{_pt2.x() - _rx, _pt1.y()}},
-                                                 sgp_line{sgp_point{_pt2.x(), _pt1.y() + _ry}, sgp_point{_pt2.x(), _pt2.y() - _ry}},
-                                                 sgp_line{sgp_point{_pt2.x() - _rx, _pt2.y()}, sgp_point{_pt1.x() + _rx, _pt2.y()}},
-                                                 sgp_line{sgp_point{_pt1.x(), _pt2.y() - _ry}, sgp_point{_pt1.x(), _pt1.y() + _ry}}};
+                std::array<sgp_line, 4> lines = {sgp_line{sgp_point{_pt1.x + _rx, _pt1.y}, sgp_point{_pt2.x - _rx, _pt1.y}},
+                                                 sgp_line{sgp_point{_pt2.x, _pt1.y + _ry}, sgp_point{_pt2.x, _pt2.y - _ry}},
+                                                 sgp_line{sgp_point{_pt2.x - _rx, _pt2.y}, sgp_point{_pt1.x + _rx, _pt2.y}},
+                                                 sgp_line{sgp_point{_pt1.x, _pt2.y - _ry}, sgp_point{_pt1.x, _pt1.y + _ry}}};
 
                 sgp_draw_lines(lines.data(), lines.size());
-
-                auto arc_top_left = path_ellipse::get_ellipse_points(point_2d(_pt1.x(), _pt1.y()),
-                                                                     point_2d(_pt1.x() + _rx * 2, _pt1.y() + _ry * 2),
-                                                                     M_PI,
-                                                                     M_PI_2 * 3.0f);
-
-                auto arc_top_right = path_ellipse::get_ellipse_points(point_2d(_pt2.x() - _rx * 2, _pt1.y()),
-                                                                      point_2d(_pt2.x(), _pt1.y() + _ry * 2),
-                                                                      M_PI_2 * 3.0f,
-                                                                      M_PI * 2.0f);
-
-                auto arc_bottom_right = path_ellipse::get_ellipse_points(point_2d(_pt2.x() - _rx * 2, _pt2.y() - _ry * 2),
-                                                                         point_2d(_pt2.x(), _pt2.y()),
-                                                                         0,
-                                                                         M_PI_2);
-
-                auto arc_bottom_left = path_ellipse::get_ellipse_points(point_2d(_pt1.x(), _pt2.y() - _ry * 2),
-                                                                        point_2d(_pt1.x() + _rx * 2, _pt2.y()),
-                                                                        M_PI_2,
-                                                                        M_PI);
 
                 sgp_draw_lines_strip(arc_top_left.data(), arc_top_left.size());
                 sgp_draw_lines_strip(arc_top_right.data(), arc_top_right.size());
                 sgp_draw_lines_strip(arc_bottom_right.data(), arc_bottom_right.size());
-                sgp_draw_lines_strip(arc_bottom_left.data(), arc_bottom_left.size()); 
+                sgp_draw_lines_strip(arc_bottom_left.data(), arc_bottom_left.size());
             }
             else
             {
-                path_line::draw_thik_line(point_2d(_pt1.x(), _pt1.y()), point_2d(_pt2.x(), _pt1.y()), style.width);
-                path_line::draw_thik_line(point_2d(_pt2.x(), _pt1.y()), point_2d(_pt2.x(), _pt2.y()), style.width);
-                path_line::draw_thik_line(point_2d(_pt2.x(), _pt2.y()), point_2d(_pt1.x(), _pt2.y()), style.width);
-                path_line::draw_thik_line(point_2d(_pt1.x(), _pt2.y()), point_2d(_pt1.x(), _pt1.y()), style.width);
+                path_line::draw_thik_line(sgp_point{_pt1.x + _rx, _pt1.y}, sgp_point{_pt2.x - _rx, _pt1.y}, style.width);
+                path_line::draw_thik_line(sgp_point{_pt2.x, _pt1.y + _ry}, sgp_point{_pt2.x, _pt2.y - _ry}, style.width);
+                path_line::draw_thik_line(sgp_point{_pt2.x - _rx, _pt2.y}, sgp_point{_pt1.x + _rx, _pt2.y}, style.width);
+                path_line::draw_thik_line(sgp_point{_pt1.x, _pt2.y - _ry}, sgp_point{_pt1.x, _pt1.y + _ry}, style.width);
+
+                path_line::draw_thik_lines(arc_top_left, style.width);
+                path_line::draw_thik_lines(arc_top_right, style.width);
+                path_line::draw_thik_lines(arc_bottom_left, style.width);
+                path_line::draw_thik_lines(arc_bottom_right, style.width);
             }
         }
 
@@ -423,12 +417,12 @@ namespace io2d
         void fill(const fill_style_s &style) override
         {
             sgp_set_color(style.color.r, style.color.g, style.color.b, style.color.a);
-            sgp_draw_filled_rect(_pt1.x(), _pt1.y(), _pt2.x() - _pt1.x(), _pt2.y() - _pt1.y());
+            sgp_draw_filled_rect(_pt1.x, _pt1.y, _pt2.x - _pt1.x, _pt2.y - _pt1.y);
         }
 
     protected:
-        point_2d _pt1;
-        point_2d _pt2;
+        sgp_point _pt1;
+        sgp_point _pt2;
         float _rx;
         float _ry;
     };
@@ -492,25 +486,25 @@ namespace io2d
             _path.begin();
         }
 
-        void line(const point_2d &pt1, const point_2d &pt2)
+        void line(const sgp_point &pt1, const sgp_point &pt2)
         {
             auto e = std::make_unique<path_line>(pt1, pt2);
             _path.add(std::move(e));
         }
 
-        void rectangle(const point_2d &pt1, const point_2d &pt2)
+        void rectangle(const sgp_point &pt1, const sgp_point &pt2)
         {
             auto e = std::make_unique<path_rect>(pt1, pt2);
             _path.add(std::move(e));
         }
 
-        void roundrect(const point_2d &pt1, const point_2d &pt2, float rx, float ry)
+        void roundrect(const sgp_point &pt1, const sgp_point &pt2, float rx, float ry)
         {
             auto e = std::make_unique<path_roundrect>(pt1, pt2, rx, ry);
             _path.add(std::move(e));
         }
 
-        void ellipse(const point_2d &pt1, const point_2d &pt2, float alpha_start = 0.0f, float alpha_end = M_PI * 2)
+        void ellipse(const sgp_point &pt1, const sgp_point &pt2, float alpha_start = 0.0f, float alpha_end = M_PI * 2)
         {
             auto e = std::make_unique<path_ellipse>(pt1, pt2, alpha_start, alpha_end);
             _path.add(std::move(e));

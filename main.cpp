@@ -25,10 +25,10 @@ static void frame(void) {
     io2d::canvas c(width, height);
 
     c.begin_path();
-    c.line(io2d::point_2d(10, 10), io2d::point_2d(50, 50));
-    c.rectangle(io2d::point_2d(10, 10), io2d::point_2d(50, 50));
+    c.line(sgp_point{10, 10}, sgp_point{50, 50});
+    c.rectangle(sgp_point{10, 10}, sgp_point{50, 50});
 
-    c.ellipse(io2d::point_2d(100, 100), io2d::point_2d(300, 300));
+    c.ellipse(sgp_point{100, 100}, sgp_point{300, 300});
 
     c.fill_style.color = io2d::rgba_color(0xff0000);
     c.fill();
@@ -38,10 +38,10 @@ static void frame(void) {
     c.stroke();
 
     c.begin_path();
-    c.ellipse(io2d::point_2d(400, 400), io2d::point_2d(500, 500), M_PI, M_PI_2 * 3.0f);
-    c.roundrect(io2d::point_2d(100, 400), io2d::point_2d(400, 600), 20.0f, 20.0f);
+    c.ellipse(sgp_point{400, 400}, sgp_point{500, 500}, M_PI, M_PI_2 * 3.0f);
+    c.roundrect(sgp_point{100, 400}, sgp_point{400, 600}, 20.0f, 20.0f);
     
-    c.stroke_style.width = 1.0f;
+    c.stroke_style.width = 3.0f;
     c.stroke();
 /*
     // Begin recording draw commands for a frame buffer of size (width, height).
