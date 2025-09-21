@@ -26,6 +26,6 @@ Following:
 
 ## Transformation
 Following:
-- move
+- translate
 - rotate
 
