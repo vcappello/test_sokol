@@ -76,7 +76,7 @@ namespace io2d
     {
     public:
         path_line(const sgp_point &pt1, const sgp_point &pt2) : _pt1(pt1),
-                                                              _pt2(pt2)
+                                                                _pt2(pt2)
         {
         }
 
@@ -176,7 +176,7 @@ namespace io2d
     {
     public:
         path_rect(const sgp_point &pt1, const sgp_point &pt2) : _pt1(pt1),
-                                                              _pt2(pt2)
+                                                                _pt2(pt2)
         {
         }
 
@@ -233,9 +233,9 @@ namespace io2d
     {
     public:
         path_ellipse(const sgp_point &pt1, const sgp_point &pt2, float alpha_start = 0.0f, float alpha_end = M_PI * 2) : _pt1(pt1),
-                                                                                                                       _pt2(pt2),
-                                                                                                                       _alpha_start(alpha_start),
-                                                                                                                       _alpha_end(alpha_end)
+                                                                                                                         _pt2(pt2),
+                                                                                                                         _alpha_start(alpha_start),
+                                                                                                                         _alpha_end(alpha_end)
         {
         }
 
@@ -268,16 +268,7 @@ namespace io2d
         {
             sgp_set_color(style.color.r, style.color.g, style.color.b, style.color.a);
 
-            auto points = get_ellipse_points(_pt1, _pt2, _alpha_start, _alpha_end);
-            auto ed = get_ellipse_data(_pt1, _pt2);
-            sgp_point center_point{ed.cx, ed.cy};
-            std::vector<sgp_triangle> triangles;
-
-            for (int i = 1; i < points.size(); i++)
-            {
-                sgp_triangle t{center_point, points[i - 1], points[i]};
-                triangles.emplace_back(t);
-            }
+            auto triangles = get_ellipse_triangles(_pt1, _pt2, _alpha_start, _alpha_end);
 
             sgp_draw_filled_triangles(triangles.data(), triangles.size());
         }
@@ -324,6 +315,22 @@ namespace io2d
             return points;
         }
 
+        static std::vector<sgp_triangle> get_ellipse_triangles(sgp_point start, sgp_point end, float alpha_start = 0.0f, float alpha_end = M_PI * 2)
+        {
+            auto points = get_ellipse_points(start, end, alpha_start, alpha_end);
+            auto ed = get_ellipse_data(start, end);
+            sgp_point center_point{ed.cx, ed.cy};
+            std::vector<sgp_triangle> triangles;
+
+            for (int i = 1; i < points.size(); i++)
+            {
+                sgp_triangle t{center_point, points[i - 1], points[i]};
+                triangles.emplace_back(t);
+            }
+
+            return triangles;
+        }
+
         static ellipse_data get_ellipse_data(sgp_point start, sgp_point end)
         {
             ellipse_data e;
@@ -350,9 +357,9 @@ namespace io2d
     {
     public:
         path_roundrect(const sgp_point &pt1, const sgp_point &pt2, float rx, float ry) : _pt1(pt1),
-                                                                                       _pt2(pt2),
-                                                                                       _rx(rx),
-                                                                                       _ry(ry)
+                                                                                         _pt2(pt2),
+                                                                                         _rx(rx),
+                                                                                         _ry(ry)
         {
         }
 
@@ -417,7 +424,34 @@ namespace io2d
         void fill(const fill_style_s &style) override
         {
             sgp_set_color(style.color.r, style.color.g, style.color.b, style.color.a);
-            sgp_draw_filled_rect(_pt1.x, _pt1.y, _pt2.x - _pt1.x, _pt2.y - _pt1.y);
+
+            auto arc_top_left = path_ellipse::get_ellipse_triangles(sgp_point{_pt1.x, _pt1.y},
+                                                                    sgp_point{_pt1.x + _rx * 2, _pt1.y + _ry * 2},
+                                                                    M_PI,
+                                                                    M_PI_2 * 3.0f);
+
+            auto arc_top_right = path_ellipse::get_ellipse_triangles(sgp_point{_pt2.x - _rx * 2, _pt1.y},
+                                                                     sgp_point{_pt2.x, _pt1.y + _ry * 2},
+                                                                     M_PI_2 * 3.0f,
+                                                                     M_PI * 2.0f);
+
+            auto arc_bottom_right = path_ellipse::get_ellipse_triangles(sgp_point{_pt2.x - _rx * 2, _pt2.y - _ry * 2},
+                                                                        sgp_point{_pt2.x, _pt2.y},
+                                                                        0,
+                                                                        M_PI_2);
+
+            auto arc_bottom_left = path_ellipse::get_ellipse_triangles(sgp_point{_pt1.x, _pt2.y - _ry * 2},
+                                                                       sgp_point{_pt1.x + _rx * 2, _pt2.y},
+                                                                       M_PI_2,
+                                                                       M_PI);
+
+            sgp_draw_filled_rect(_pt1.x + _rx, _pt1.y, _pt2.x - _pt1.x - _rx * 2, _pt2.y - _pt1.y);
+            sgp_draw_filled_rect(_pt1.x, _pt1.y + _ry, _pt2.x - _pt1.x, _pt2.y - _pt1.y - _ry * 2);
+
+            sgp_draw_filled_triangles(arc_top_left.data(), arc_top_left.size());
+            sgp_draw_filled_triangles(arc_top_right.data(), arc_top_right.size());
+            sgp_draw_filled_triangles(arc_bottom_right.data(), arc_bottom_right.size());
+            sgp_draw_filled_triangles(arc_bottom_left.data(), arc_bottom_left.size());
         }
 
     protected:

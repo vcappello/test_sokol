@@ -41,6 +41,9 @@ static void frame(void) {
     c.ellipse(sgp_point{400, 400}, sgp_point{500, 500}, M_PI, M_PI_2 * 3.0f);
     c.roundrect(sgp_point{100, 400}, sgp_point{400, 600}, 20.0f, 20.0f);
     
+    c.fill_style.color = io2d::rgba_color(0xff0000);
+    c.fill();
+        
     c.stroke_style.width = 3.0f;
     c.stroke();
 /*
