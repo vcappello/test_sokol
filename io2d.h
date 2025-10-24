@@ -7,6 +7,7 @@
 #include <memory>
 #include <cmath>
 #include <numbers>
+#include <limits>
 
 namespace io2d
 {
@@ -20,10 +21,10 @@ namespace io2d
         rgba_color(channel_t r, channel_t g, channel_t b, channel_t a = 1.0f) : r(r), g(g), b(b), a(a) {}
         rgba_color(uint32_t argb)
         {
-            a = (argb >> 24) & 0xff;
-            r = (argb >> 16) & 0xff;
-            g = (argb >> 8) & 0xff;
-            b = argb & 0xff;
+            a = ((argb >> 24) & 0xff) / 255.0f;
+            r = ((argb >> 16) & 0xff) / 255.0f;
+            g = ((argb >> 8) & 0xff) / 255.0f;
+            b = (argb & 0xff) / 255.0f;
         }
 
     public:
@@ -59,11 +60,11 @@ namespace io2d
     /**
      * @brief Base class for path elements
      */
-    class path_element
+    class abstract_sub_path
     {
     public:
-        path_element() {}
-        virtual ~path_element() {}
+        abstract_sub_path() {}
+        virtual ~abstract_sub_path() {}
 
         virtual void stroke(const stroke_style_s &style) = 0;
         virtual void fill(const fill_style_s &style) = 0;
@@ -72,13 +73,14 @@ namespace io2d
     /**
      * @brief A line path element
      */
-    class path_line : public path_element
+    class path_line : public abstract_sub_path
     {
     public:
         path_line(const sgp_point &pt1, const sgp_point &pt2) : _pt1(pt1),
                                                                 _pt2(pt2)
         {
         }
+        virtual ~path_line() {}
 
         /**
          * @brief Draw the line using the stroke style
@@ -172,13 +174,14 @@ namespace io2d
     /**
      * @brief A rectangle path element
      */
-    class path_rect : public path_element
+    class path_rect : public abstract_sub_path
     {
     public:
         path_rect(const sgp_point &pt1, const sgp_point &pt2) : _pt1(pt1),
                                                                 _pt2(pt2)
         {
         }
+        virtual ~path_rect() {}
 
         /**
          * @brief Draw the rectangle using the stroke style
@@ -218,19 +221,20 @@ namespace io2d
         sgp_point _pt2;
     };
 
-    struct ellipse_data
-    {
-        float rx;
-        float ry;
-        float cx;
-        float cy;
-    };
-
     /**
      * @brief An ellipse path element
      */
-    class path_ellipse : public path_element
+    class path_ellipse : public abstract_sub_path
     {
+    public:
+        struct ellipse_data
+        {
+            float cx; // Center x
+            float cy; // Center y
+            float rx; // Radius x
+            float ry; // Radius y
+        };
+
     public:
         path_ellipse(const sgp_point &pt1, const sgp_point &pt2, float alpha_start = 0.0f, float alpha_end = M_PI * 2) : _pt1(pt1),
                                                                                                                          _pt2(pt2),
@@ -238,22 +242,22 @@ namespace io2d
                                                                                                                          _alpha_end(alpha_end)
         {
         }
+        virtual ~path_ellipse() {}
 
         /**
          * @brief Draw the ellipse using the stroke style
          */
         void stroke(const stroke_style_s &style) override
         {
+            auto points = get_ellipse_points(_pt1, _pt2, _alpha_start, _alpha_end);
+
             sgp_set_color(style.color.r, style.color.g, style.color.b, style.color.a);
             if (style.width == 1.0f)
             {
-                auto points = get_ellipse_points(_pt1, _pt2, _alpha_start, _alpha_end);
                 sgp_draw_lines_strip(points.data(), points.size());
             }
             else
             {
-                auto points = get_ellipse_points(_pt1, _pt2, _alpha_start, _alpha_end);
-
                 for (int i = 1; i < points.size() - 1; i++)
                 {
                     path_line::draw_thik_line(points[i - 1], points[i], style.width);
@@ -353,7 +357,7 @@ namespace io2d
     /**
      * @brief A rounded rectangle path element
      */
-    class path_roundrect : public path_element
+    class path_roundrect : public abstract_sub_path
     {
     public:
         path_roundrect(const sgp_point &pt1, const sgp_point &pt2, float rx, float ry) : _pt1(pt1),
@@ -362,14 +366,13 @@ namespace io2d
                                                                                          _ry(ry)
         {
         }
+        virtual ~path_roundrect() {}
 
         /**
          * @brief Draw the rounded rectangle using the stroke style
          */
         void stroke(const stroke_style_s &style) override
         {
-            sgp_set_color(style.color.r, style.color.g, style.color.b, style.color.a);
-
             auto arc_top_left = path_ellipse::get_ellipse_points(sgp_point{_pt1.x, _pt1.y},
                                                                  sgp_point{_pt1.x + _rx * 2, _pt1.y + _ry * 2},
                                                                  M_PI,
@@ -389,6 +392,8 @@ namespace io2d
                                                                     sgp_point{_pt1.x + _rx * 2, _pt2.y},
                                                                     M_PI_2,
                                                                     M_PI);
+
+            sgp_set_color(style.color.r, style.color.g, style.color.b, style.color.a);
 
             if (style.width == 1.0f)
             {
@@ -461,6 +466,249 @@ namespace io2d
         float _ry;
     };
 
+    class sub_path : public abstract_sub_path
+    {
+    public:
+        sub_path() {}
+        virtual ~sub_path() {}
+
+        void move_to(const sgp_point &pt)
+        {
+            _points.emplace_back(pt);
+        }
+
+        void line_to(const sgp_point &pt)
+        {
+            if (_points.empty())
+                return;
+
+            _points.emplace_back(pt);
+        }
+
+        void arc_to(const sgp_point &pt1, const sgp_point &pt2, float radius)
+        {
+            if (_points.empty())
+                return;
+
+            auto arc_points = get_arc_to_points(_points.back(), pt1, pt2, radius);
+
+            _points.insert(_points.end(), arc_points.begin(), arc_points.end());
+        }
+
+        void close_path()
+        {
+            if (_points.empty())
+                return;
+            _points.emplace_back(_points.front());
+        }
+
+        void stroke(const stroke_style_s &style) override
+        {
+            sgp_set_color(style.color.r, style.color.g, style.color.b, style.color.a);
+
+            if (style.width == 1.0f)
+            {
+                sgp_draw_lines_strip(_points.data(), _points.size());
+            }
+            else
+            {
+                for (int i = 1; i < _points.size() - 1; i++)
+                {
+                    path_line::draw_thik_line(_points[i - 1], _points[i], style.width);
+                }
+            }
+        }
+
+        void fill(const fill_style_s &style) override
+        {
+            sgp_set_color(style.color.r, style.color.g, style.color.b, style.color.a);
+
+            auto triangles = triangulate_polygon(_points);
+
+            sgp_draw_filled_triangles(triangles.data(), triangles.size());
+        }
+
+        static float cross_product(const sgp_point &a, const sgp_point &b, const sgp_point &c)
+        {
+            return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+        }
+
+        static float distance(const sgp_point &p1, const sgp_point &p2)
+        {
+            return std::sqrt(std::pow(p2.x - p1.x, 2) + std::pow(p2.y - p1.y, 2));
+        }
+
+        static float angle_between_vectors(const sgp_point &p1, const sgp_point &p2, const sgp_point &p3)
+        {
+            double v1_x = p2.x - p1.x;
+            double v1_y = p2.y - p1.y;
+            double v2_x = p3.x - p2.x;
+            double v2_y = p3.y - p2.y;
+            double dot = v1_x * v2_x + v1_y * v2_y;
+            double mag1 = std::sqrt(v1_x * v1_x + v1_y * v1_y);
+            double mag2 = std::sqrt(v2_x * v2_x + v2_y * v2_y);
+            return std::acos(dot / (mag1 * mag2));
+        }
+
+        static std::vector<sgp_point> get_arc_to_points(const sgp_point &p0, const sgp_point &p1, const sgp_point &p2, float radius)
+        {
+
+            std::vector<sgp_point> arcPoints;
+
+            // Direction vectors
+            float dx1 = p0.x - p1.x;
+            float dy1 = p0.y - p1.y;
+            float dx2 = p2.x - p1.x;
+            float dy2 = p2.y - p1.y;
+
+            // Normalize direction vectors
+            float len1 = std::hypot(dx1, dy1);
+            float len2 = std::hypot(dx2, dy2);
+            dx1 /= len1;
+            dy1 /= len1;
+            dx2 /= len2;
+            dy2 /= len2;
+
+            // Compute angle between vectors
+            float angle = std::acos(dx1 * dx2 + dy1 * dy2);
+            float tanHalfAngle = std::tan(angle / 2.0);
+
+            // Distance from intersection point to tangent points
+            float dist = radius / tanHalfAngle;
+
+            // Compute tangent points
+            sgp_point tangent1 = {p1.x + dx1 * dist, p1.y + dy1 * dist};
+            sgp_point tangent2 = {p1.x + dx2 * dist, p1.y + dy2 * dist};
+
+            // Compute arc center
+            float bisectX = dx1 + dx2;
+            float bisectY = dy1 + dy2;
+            float bisectLen = std::hypot(bisectX, bisectY);
+            bisectX /= bisectLen;
+            bisectY /= bisectLen;
+
+            sgp_point center = {
+                p1.x + bisectX * radius / std::sin(angle / 2.0f),
+                p1.y + bisectY * radius / std::sin(angle / 2.0f)};
+
+            // Compute start and end angles
+            float startAngle = std::atan2(tangent1.y - center.y, tangent1.x - center.x);
+            float endAngle = std::atan2(tangent2.y - center.y, tangent2.x - center.x);
+
+            // Determine arc direction
+            bool clockwise = (dx1 * dy2 - dy1 * dx2) < 0;
+
+            // Compute angle difference
+            float deltaAngle = endAngle - startAngle;
+            if (clockwise && deltaAngle < 0)
+                deltaAngle += 2 * M_PI;
+            if (!clockwise && deltaAngle > 0)
+                deltaAngle -= 2 * M_PI;
+
+            // Estimate arc length
+            float arcLength = std::abs(deltaAngle) * radius;
+
+            // Automatically determine number of segments (1 point every ~2 pixels)
+            int segments = std::max(4, static_cast<int>(arcLength / 2.0));
+
+            // Generate arc points
+            for (int i = 0; i <= segments; ++i)
+            {
+                float theta = startAngle + deltaAngle * i / segments;
+                arcPoints.push_back(sgp_point{center.x + radius * std::cos(theta), center.y + radius * std::sin(theta)});
+            }
+
+            return arcPoints;
+        }
+
+        static float cross(const sgp_point &a, const sgp_point &b, const sgp_point &c)
+        {
+            return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+        }
+
+        static bool is_convex(const sgp_point &prev, const sgp_point &curr, const sgp_point &next)
+        {
+            return cross(prev, curr, next) < 0;
+        }
+
+        static bool point_in_triangle(const sgp_point &p, const sgp_triangle &t)
+        {
+            double d1 = cross(t.a, t.b, p);
+            double d2 = cross(t.b, t.c, p);
+            double d3 = cross(t.c, t.a, p);
+            bool has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+            bool has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+            return !(has_neg && has_pos);
+        }
+
+        static std::vector<sgp_triangle> triangulate_polygon(std::vector<sgp_point> polygon)
+        {
+            std::vector<sgp_triangle> triangles;
+            int n = polygon.size();
+            if (n < 3)
+                return triangles;
+
+            std::vector<int> indices(n);
+            for (int i = 0; i < n; ++i)
+                indices[i] = i;
+
+            while (indices.size() > 3)
+            {
+                bool ear_found = false;
+                for (size_t i = 0; i < indices.size(); ++i)
+                {
+                    int prev = indices[(i + indices.size() - 1) % indices.size()];
+                    int curr = indices[i];
+                    int next = indices[(i + 1) % indices.size()];
+
+                    sgp_point a = polygon[prev];
+                    sgp_point b = polygon[curr];
+                    sgp_point c = polygon[next];
+
+                    if (!is_convex(a, b, c))
+                        continue;
+
+                    sgp_triangle ear = {a, b, c};
+                    bool contains_point = false;
+                    for (int j : indices)
+                    {
+                        if (j == prev || j == curr || j == next)
+                            continue;
+                        if (point_in_triangle(polygon[j], ear))
+                        {
+                            contains_point = true;
+                            break;
+                        }
+                    }
+
+                    if (!contains_point)
+                    {
+                        triangles.push_back(ear);
+                        indices.erase(indices.begin() + i);
+                        ear_found = true;
+                        break;
+                    }
+                }
+
+                if (!ear_found)
+                {
+                    return std::vector<sgp_triangle>{}; // Fallback in case of failure
+                }
+            }
+
+            // Triangolo finale
+            if (indices.size() == 3)
+            {
+                triangles.push_back({polygon[indices[0]], polygon[indices[1]], polygon[indices[2]]});
+            }
+
+            return triangles;
+        }
+
+    protected:
+        std::vector<sgp_point> _points;
+    };
+
     class path
     {
     public:
@@ -469,7 +717,7 @@ namespace io2d
             _elements.clear();
         }
 
-        void add(std::unique_ptr<path_element> &&e)
+        void add(std::unique_ptr<abstract_sub_path> &&e)
         {
             _elements.emplace_back(std::move(e));
         }
@@ -486,8 +734,21 @@ namespace io2d
                 e->fill(style);
         }
 
+        bool empty() const
+        {
+            return _elements.empty();
+        }
+
+        sub_path *current_sub_path()
+        {
+            if (_elements.empty())
+                return nullptr;
+
+            return dynamic_cast<sub_path *>(_elements.back().get());
+        }
+
     protected:
-        std::vector<std::unique_ptr<path_element>> _elements;
+        std::vector<std::unique_ptr<abstract_sub_path>> _elements;
     };
 
     class canvas
@@ -520,6 +781,12 @@ namespace io2d
             _path.begin();
         }
 
+        void clear()
+        {
+            sgp_set_color(fill_style.color.r, fill_style.color.g, fill_style.color.b, fill_style.color.a);
+            sgp_clear();
+        }
+
         void line(const sgp_point &pt1, const sgp_point &pt2)
         {
             auto e = std::make_unique<path_line>(pt1, pt2);
@@ -544,6 +811,29 @@ namespace io2d
             _path.add(std::move(e));
         }
 
+        void move_to(const sgp_point &pt)
+        {
+            auto e = std::make_unique<sub_path>();
+            e->move_to(pt);
+
+            _path.add(std::move(e));
+        }
+
+        void line_to(const sgp_point &pt)
+        {
+            get_current_sub_path(pt)->line_to(pt);
+        }
+
+        void arc_to(const sgp_point &pt1, const sgp_point &pt2, float radius)
+        {
+            get_current_sub_path(pt1)->arc_to(pt1, pt2, radius);
+        }
+
+        void close_path()
+        {
+            get_current_sub_path(sgp_point{0, 0})->close_path();
+        }
+
         void stroke()
         {
             _path.stroke(stroke_style);
@@ -560,5 +850,20 @@ namespace io2d
 
     protected:
         path _path;
+
+    protected:
+        sub_path *get_current_sub_path(const sgp_point &default_point)
+        {
+            auto sp = _path.current_sub_path();
+
+            if (!sp)
+            {
+                _path.add(std::move(std::make_unique<sub_path>()));
+                sp = _path.current_sub_path();
+                sp->move_to(default_point);
+            }
+
+            return sp;
+        }
     };
 }
